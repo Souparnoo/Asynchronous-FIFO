@@ -1326,3 +1326,150 @@ The current design provides a working foundation for continuing the
 project.
 
 **Day 1 ends here. Further work will continue from this architecture.**
+------------------------------------------------------------------------
+
+# 30. Vivado Simulation Issue Found After Day 1
+
+After the testbench was working in **Icarus Verilog**, the same testbench
+was run in **Vivado simulation**.
+
+A simulator-specific issue was observed.
+
+The simulation was progressing only up to approximately:
+
+``` text
+100 ns
+```
+
+and then became stuck during:
+
+``` text
+TEST 2 --- Fill FIFO
+```
+
+The important observation is:
+
+``` text
+Icarus Verilog → testbench runs successfully
+Vivado        → simulation gets stuck around Test 2
+```
+
+Therefore, this is currently being treated as a **testbench/simulation
+scheduling issue that needs further debugging**, rather than immediately
+assuming that the FIFO RTL itself is incorrect.
+
+## 30.1 Why This Is Being Investigated
+
+Test 2 attempts to fill the FIFO with 63 entries and then verify:
+
+``` verilog
+full == 1
+```
+
+The FIFO uses:
+
+``` text
+80 MHz write clock
+50 MHz read clock
+```
+
+so the two clock domains continue operating independently.
+
+The testbench also interacts with the DUT at clock edges. Different
+simulators can expose differences in event scheduling and race conditions,
+especially when the testbench and DUT both react to the same clock edge.
+
+The current suspicion is therefore around the **testbench synchronization,
+event scheduling, or a wait condition**, rather than concluding that the
+FIFO design is broken.
+
+## 30.2 Debugging Approach
+
+The next debugging step is to make Test 2 completely observable.
+
+Debug messages will be added around each write so that the simulation can
+show:
+
+``` text
+write number
+write pointer
+synchronized read pointer
+full flag
+```
+
+For example:
+
+``` verilog
+$display("[%0t] Write %0d: wp=%0d full=%b",
+         $time, i, dut.wp, full);
+```
+
+The beginning and end of Test 2 will also be explicitly printed:
+
+``` verilog
+$display("[%0t] TEST 2 START", $time);
+```
+
+and:
+
+``` verilog
+$display("[%0t] TEST 2 WRITES COMPLETE", $time);
+```
+
+This will identify the exact transaction at which Vivado stops progressing.
+
+## 30.3 Important Observation About Test 2
+
+The test does not need to wait indefinitely for `full` while performing the
+63 writes.
+
+The FIFO has a known usable capacity of:
+
+``` text
+63 entries
+```
+
+Therefore, Test 2 can perform exactly 63 deterministic write transactions,
+then allow the `full` logic to settle and check the resulting flag.
+
+This avoids making the main fill loop dependent on a potentially problematic
+wait condition.
+
+The intended structure is:
+
+``` text
+Start Test 2
+     ↓
+Perform 63 write-clock transactions
+     ↓
+Stop writing
+     ↓
+Allow full logic to settle
+     ↓
+Check full == 1
+     ↓
+End Test 2
+```
+
+This is also useful for debugging because the exact write at which the
+simulation stops becomes visible.
+
+## 30.4 Current Status of This Issue
+
+At this stage:
+
+``` text
+RTL compilation              → working
+Icarus Verilog simulation    → working
+Vivado simulation            → gets stuck around 100 ns
+Problem location             → Test 2, FIFO fill
+Root cause                   → still being investigated
+```
+
+The issue is therefore recorded as an **open Day 1 verification/debugging
+item**.
+
+No change is being made to the FIFO architecture solely based on this
+simulator difference until the exact cause is identified.
+
+------------------------------------------------------------------------
