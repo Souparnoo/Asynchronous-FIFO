@@ -8,7 +8,7 @@ module test_bench;
 
     localparam DATA_WIDTH   = 8;
     localparam FIFO_DEPTH   = 64;
-    localparam FIFO_CAPACITY = 63;
+    localparam FIFO_CAPACITY =64;
 
 
     // ============================================================
@@ -488,7 +488,7 @@ module test_bench;
     //
     // FILL FIFO
     //
-    // 63 usable entries.
+    // 64 usable entries.
     // ============================================================
 
     task test_fill;
@@ -740,7 +740,7 @@ module test_bench;
 
 
             // Repeated write/read causes both pointers
-            // to cross 63 -> 0.
+            // to cross 64 -> 0.
 
             for (j = 0; j < 130; j = j + 1) begin
 
